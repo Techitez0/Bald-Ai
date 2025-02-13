@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hair Health Analysis Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes progress {
+            0% { width: 0; }
+            100% { width: var(--progress-width); }
+        }
+        .progress-bar {
+            --progress-width: 0%;
+            animation: progress 1.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-7xl">
+        <!-- Header -->
+        <div class="text-center mb-16">
+            <h1 class="text-5xl font-bold text-gray-800 mb-4">Hair Health Analysis</h1>
+            <p class="text-xl text-gray-600">Complete scalp evaluation with AI-powered insights</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="grid md:grid-cols-2 gap-12 mb-20">
+            <!-- Camera Section -->
+            <div class="bg-white rounded-3xl shadow-2xl p-8">
+                <h2 class="text-3xl font-semibold text-gray-800 mb-6">Live Analysis</h2>
+                <div class="aspect-square bg-gray-100 rounded-2xl overflow-hidden mb-6">
+                    <video id="videoPreview" class="w-full h-full object-cover hidden" autoplay playsinline></video>
+                    <div id="cameraPlaceholder" class="w-full h-full flex items-center justify-center">
+                        <p class="text-gray-400 text-lg">Camera Preview</p>
+                    </div>
+                </div>
+                <div class="flex gap-4 justify-center">
+                    <button id="startCamera" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl text-lg transition-all">
+                        📸 Start Camera
+                    </button>
+                    <button id="captureBtn" class="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl text-lg transition-all hidden">
+                        ⚡ Capture
+                    </button>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="bg-white rounded-3xl shadow-2xl p-8">
+                <h2 class="text-3xl font-semibold text-gray-800 mb-6">Upload Analysis</h2>
+                <div class="aspect-square bg-gray-100 rounded-2xl overflow-hidden mb-6 relative">
+                    <img id="uploadedImage" class="w-full h-full object-contain hidden">
+                    <div id="uploadPlaceholder" class="w-full h-full flex items-center justify-center">
+                        <p class="text-gray-400 text-lg">Upload Preview</p>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <label class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-xl text-lg cursor-pointer transition-all">
+                        📁 Upload Image
+                        <input type="file" id="fileInput" accept="image/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="hidden bg-white rounded-3xl shadow-2xl p-12 mb-20">
+            <div class="grid lg:grid-cols-2 gap-12">
+                <!-- Score & Progress -->
+                <div class="space-y-8">
+                    <h2 class="text-4xl font-bold text-gray-800">Analysis Results</h2>
+                    <div class="bg-blue-50 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-2xl font-semibold text-blue-600">Baldness Score</h3>
+                            <span id="percentage" class="text-4xl font-bold text-blue-600">0%</span>
+                        </div>
+                        <div class="h-4 bg-gray-200 rounded-full overflow-hidden">
+                            <div id="progressBar" class="h-full bg-gradient-to-r from-blue-400 to-purple-500 progress-bar"></div>
+                        </div>
+                    </div>
+                    <div id="stageDisplay" class="bg-gray-100 rounded-xl p-6">
+                        <h3 class="text-2xl font-semibold text-gray-800 mb-4">Current Stage</h3>
+                        <div class="flex items-center gap-4">
+                            <span id="stageNumber" class="text-6xl font-bold text-purple-600">0</span>
+                            <span id="stageText" class="text-lg text-gray-600"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="space-y-8">
+                    <h2 class="text-4xl font-bold text-gray-800">Recommendations</h2>
+                    <div id="recommendations" class="grid gap-6">
+                        <!-- Recommendations will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Retake Section -->
+        <div class="text-center">
+            <button id="retakeBtn" class="bg-gray-800 hover:bg-gray-900 text-white px-12 py-6 rounded-2xl text-xl transition-all hidden">
+                🔄 Start New Analysis
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('videoPreview');
+        const startCamera = document.getElementById('startCamera');
+        const captureBtn = document.getElementById('captureBtn');
+        const fileInput = document.getElementById('fileInput');
+        const results = document.getElementById('results');
+        const retakeBtn = document.getElementById('retakeBtn');
+        let stream = null;
+        let isCameraActive = false;
+
+        async function initializeCamera() {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720, facingMode: 'user' } 
+                });
+
+                video.srcObject = stream;
+                video.classList.remove('hidden');
+                document.getElementById('cameraPlaceholder').classList.add('hidden');
+                captureBtn.classList.remove('hidden');
+                startCamera.classList.add('hidden');
+                isCameraActive = true;
+
+            } catch (err) {
+                alert('Camera access required for live analysis');
+                isCameraActive = false;
+            }
+        }
+
+        function handleCapture() {
+            if (!isCameraActive) {
+                initializeCamera();
+                return;
+            }
+
+            // Create canvas and capture frame
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw the video frame to canvas (mirror image)
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Display captured image in upload section
+            const imageData = canvas.toDataURL('image/jpeg');
+            document.getElementById('uploadedImage').src = imageData;
+            document.getElementById('uploadedImage').classList.remove('hidden');
+            document.getElementById('uploadPlaceholder').classList.add('hidden');
+            
+            // Stop the camera after capture
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            video.classList.add('hidden');
+            document.getElementById('cameraPlaceholder').classList.remove('hidden');
+            captureBtn.classList.add('hidden');
+            startCamera.classList.remove('hidden');
+            isCameraActive = false;
+            
+            // Analyze the captured image
+            analyzeImage(imageData);
+        }
+
+        function handleRetake() {
+            // Reset results section
+            results.classList.add('hidden');
+            retakeBtn.classList.add('hidden');
+            
+            // Reset progress indicators
+            document.getElementById('percentage').textContent = '0%';
+            document.getElementById('progressBar').style.width = '0%';
+            
+            // Reset camera section
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            video.classList.add('hidden');
+            document.getElementById('cameraPlaceholder').classList.remove('hidden');
+            captureBtn.classList.add('hidden');
+            startCamera.classList.remove('hidden');
+            isCameraActive = false;
+            
+            // Reset upload section
+            document.getElementById('uploadedImage').classList.add('hidden');
+            document.getElementById('uploadPlaceholder').classList.remove('hidden');
+            fileInput.value = ''; // Clear the file input
+        }
+
+        startCamera.addEventListener('click', initializeCamera);
+        captureBtn.addEventListener('click', handleCapture);
+        retakeBtn.addEventListener('click', handleRetake);
+
+        // File Upload Handling
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    document.getElementById('uploadedImage').src = event.target.result;
+                    document.getElementById('uploadedImage').classList.remove('hidden');
+                    document.getElementById('uploadPlaceholder').classList.add('hidden');
+                    analyzeImage(event.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Analysis Function
+        function analyzeImage(imageData) {
+            // Mock analysis (replace with actual processing)
+            const percentage = Math.floor(Math.random() * 100);
+            const stage = Math.min(Math.floor(percentage / 25) + 1, 4);
+            
+            // Update UI
+            document.getElementById('percentage').textContent = `${percentage}%`;
+            document.getElementById('progressBar').style.setProperty('--progress-width', `${percentage}%`);
+            document.getElementById('stageNumber').textContent = stage;
+            
+            const stageTexts = {
+                1: 'Early Signs - Maintain Care',
+                2: 'Moderate Thinning - Take Action',
+                3: 'Advanced Loss - Professional Help',
+                4: 'Severe Loss - Medical Options'
+            };
+            document.getElementById('stageText').textContent = stageTexts[stage];
+
+            // Recommendations
+            const recommendations = {
+                1: ['Daily Scalp Massage', 'Vitamin-Rich Diet', 'Gentle Hair Care'],
+                2: ['Topical Treatments', 'Laser Therapy', 'Stress Management'],
+                3: ['Clinical Solutions', 'PRP Therapy', 'Custom Regimens'],
+                4: ['Transplant Options', 'Advanced Treatments', 'Support Groups']
+            };
+            
+            const recContainer = document.getElementById('recommendations');
+            recContainer.innerHTML = recommendations[stage].map(rec => `
+                <div class="bg-gray-50 p-6 rounded-xl hover:bg-purple-50 transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <span class="text-purple-600 text-xl">✓</span>
+                        </div>
+                        <h4 class="text-xl font-semibold text-gray-800">${rec}</h4>
+                    </div>
+                </div>
+            `).join('');
+
+            // Show results and retake button
+            results.classList.remove('hidden');
+            retakeBtn.classList.remove('hidden');
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
